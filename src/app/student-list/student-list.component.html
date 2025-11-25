@@ -1,0 +1,42 @@
+<div class="table-container">
+
+  <h2 class="title">Student Details</h2>
+
+  <table class="student-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Full Name</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th>Gender</th>
+        <th>Department</th>
+        <th>Address</th>
+        <th>Address Proof</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr *ngFor="let s of students">
+        <td>{{ s.studentID }}</td>
+        <td>{{ s.fullName }}</td>
+        <td>{{ s.email }}</td>
+        <td>{{ s.phoneno }}</td>
+        <td>{{ s.gender }}</td>
+        <td>{{ getDeptName(s.department) }}</td>
+        <td>{{ s.address }}</td>
+        <td>{{ s.addressProf }}</td>
+
+        <td>
+          
+          <button class="edit-btn" (click)="editStudent(s)">Edit</button>
+          
+          <button class="delete-btn" (click)="deleteStudent(s.studentID)">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+    
+  </table>
+
+</div>
