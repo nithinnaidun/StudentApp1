@@ -2,7 +2,7 @@
 
   <h2 class="title">STUDENT REGISTRATION FORM</h2>
 
-  <form #studentForm="ngForm" (ngSubmit)="onSubmit(studentForm)">
+  <form #studentForm="ngForm" (ngSubmit)="onSubmit(studentForm)" novalidate>
 
     <div class="form-grid">
 
@@ -11,23 +11,29 @@
 
         <!-- Full Name -->
         <div class="form-group">
-         
-
           <label>Full Name</label>
-          <input type="text" name="fullName" [(ngModel)]="model.fullName" #fullName="ngModel" placeholder="Enter full name"
-          required pattern="^[A-Za-z ]+$">
+
+          <input type="text" name="fullName" [(ngModel)]="model.FullName" #fullName="ngModel" placeholder="Enter full name"
+              requiredpattern="^[A-Za-z ]+$">
+          <div *ngIf="fullName.errors?.['required'] && fullName.touched" class="error">Full Name is required</div>
+          <div *ngIf="fullName.errors?.['pattern'] && fullName.touched" class="error">Only alphabets are allowed</div>
         </div>
 
         <!-- Email -->
         <div class="form-group">
           <label>Email</label>
-          <input type="email" name="email" [(ngModel)]="model.email" #email="ngModel" placeholder="name@example.com" required email>
+          <input type="email" name="email"  [(ngModel)]="model.email"  #email="ngModel" placeholder="name@example.com"
+              required email (blur)="checkEmail()">
+          <div *ngIf="email.errors?.['required'] && email.touched" class="error">Email is required</div>
+          <div *ngIf="email.errors?.['email'] && email.touched" class="error">Enter a valid email address</div>
+          <div *ngIf="isDuplicateEmail" class="error"> This email is already used</div>
         </div>
 
         <!-- Address -->
         <div class="form-group">
           <label>Address</label>
-          <input type="text" name="address" [(ngModel)]="model.address" #address="ngModel" placeholder="Enter address" required>
+          <input type="text" name="address" [(ngModel)]="model.Address" #address="ngModel" placeholder="Enter address" required>
+          <div *ngIf="address.errors?.['required'] && address.touched" class="error">Address is required</div>
         </div>
 
         <!-- File Upload -->
@@ -41,53 +47,61 @@
       <!-- RIGHT SIDE -->
       <div class="form-right">
 
-        <!-- Phone -->
+        <!-- Phone Number -->
         <div class="form-group">
           <label>Phone Number</label>
-          <input type="text" name="phoneno" [(ngModel)]="model.phoneno" #phone="ngModel" placeholder="10-digit number"
-            required minlength="10" maxlength="10" pattern="^[0-9]+$">
+
+          <input type="text" name="phoneno" [(ngModel)]="model.Phoneno" #phone="ngModel" placeholder="Indian mobile number" required
+                 pattern="^[6-9][0-9]{9}$" (blur)="checkPhone()">
+          <div *ngIf="phone.errors?.['required'] && phone.touched" class="error">Phone number is required</div>
+          <div *ngIf="phone.errors?.['pattern'] && phone.touched" class="error">Enter a valid Indian mobile number</div>
+          <div *ngIf="isDuplicatePhone" class="error">This phone number is already used</div>
         </div>
 
         <!-- Gender -->
         <div class="form-group">
           <label>Gender</label>
-          <select name="gender" [(ngModel)]="model.gender" #gender="ngModel" required>
+          <select name="gender" [(ngModel)]="model.Gender" #gender="ngModel" required>
             <option value="">Select Gender</option>
             <option>Male</option>
             <option>Female</option>
             <option>Other</option>
           </select>
+          <div *ngIf="gender.invalid && gender.touched" class="error">Please select a gender</div>
         </div>
 
-    <!-- Department -->
-   <div class="form-group">
-  <label>Department</label>
+        <!-- Department -->
+        <div class="form-group">
+          <label>Department</label>
 
-  <select name="department" [(ngModel)]="model.department" required>
-    <option value="">Select Department</option>
+          <select name="department" [(ngModel)]="model.Department" #dept="ngModel" required>
+            <option value="">Select Department</option>
+            <option *ngFor="let d of Department" [value]="d.DeptID"> {{ d.DeptName }}</option>
+          </select>
+          <div *ngIf="dept.invalid && dept.touched" class="error"> Please select a department</div>
+        </div>
 
-    <option *ngFor="let d of Department" [value]="d.DeptID">
-      {{ d.DeptName }}
-    </option>
-  </select>
-</div>
+        <!-- Address Proof -->
+        <div class="form-group">
+        <label>Address Proof</label>
 
-    <!-- Address Proof -->
-      <div class="form-group">
-        <label>address Proof</label>
         <div class="checkbox-row">
-          <label><input type="checkbox" value="Aadhaar" [checked]="proofList.includes('Aadhaar')"(change)="toggleProof($event)"> Aadhaar</label>
+        <label>
+        <input type="checkbox" value="Aadhaar" [checked]="proofList.includes('Aadhaar')" (change)="toggleProof($event)">Aadhaar</label>
         <label><input type="checkbox" value="PAN" [checked]="proofList.includes('PAN')" (change)="toggleProof($event)">PAN</label>
-       <label><input type="checkbox" value="Voter" [checked]="proofList.includes('Voter')" (change)="toggleProof($event)">Voter</label>
-
-          </div>
+        <label><input type="checkbox" value="Voter" [checked]="proofList.includes('Voter')" (change)="toggleProof($event)">Voter</label>
         </div>
-
+              <div *ngIf="proofList.length === 0 && isSubmitted" class="error">Address proof is required</div>
+        </div>
       </div>
-
     </div>
-<button type="submit" class="submit-btn"> {{ model.studentID ? 'Update' : 'Submit' }}</button>
-   <button type="button" (click)="resetForm(studentForm)">Reset</button>
+
+    <!-- BUTTONS -->
+    <button type="submit" class="submit-btn">
+      {{ model.StudentID ? 'Update' : 'Submit' }}
+    </button>
+
+    <button type="button" (click)="resetForm(studentForm)">Reset</button>
 
   </form>
 

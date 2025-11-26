@@ -11,28 +11,43 @@ export class StudentService {
 
   constructor(private http: HttpClient) {}
 
+  // GET ALL STUDENTS
   getStudents(): Observable<any> {
     return this.http.get(`${this.baseUrl}`);
   }
 
+  // INSERT
   insertStudent(data: any): Observable<any> {
     return this.http.post(`${this.baseUrl}/InsertStudent`, data);
-    
   }
 
-updateStudent(id: number, model: any) {
-  return this.http.put(`${this.baseUrl}/updateStudent/${id}`, model, {
-    responseType: 'text'
-  });
-}
+  // UPDATE
+  updateStudent(id: number, model: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/UpdateStudent/${id}`, model);
+  }
 
+  // DELETE
+  deleteStudent(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/DeleteStudent/${id}`);
+  }
+
+  // FILE UPLOAD
   uploadDocument(formData: FormData): Observable<any> {
     return this.http.post(`${this.baseUrl}/UploadDocument`, formData);
   }
-  getDepartments() {
-  return this.http.get<any>(`${this.baseUrl}/sp_GetDepartment`);
-}
-deleteStudent(id: number): Observable<any> {
-  return this.http.delete(`${this.baseUrl}/DeleteStudent/${id}`);
-}
+
+  // GET DEPARTMENTS
+  getDepartments(): Observable<any> {
+    return this.http.get(`${this.baseUrl}/sp_GetDepartment`);
+  }
+
+  // CHECK DUPLICATE EMAIL
+  checkEmail(email: string): Observable<boolean> {
+    return this.http.get<boolean>(`${this.baseUrl}/check-email/${email}`);
+  }
+
+  // CHECK DUPLICATE PHONE
+  checkPhone(phone: string): Observable<boolean> {
+    return this.http.get<boolean>(`${this.baseUrl}/check-phone/${phone}`);
+  }
 }
