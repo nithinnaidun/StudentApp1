@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { Student } from './student.model';
 
 @Injectable({
   providedIn: 'root'
@@ -11,43 +12,35 @@ export class StudentService {
 
   constructor(private http: HttpClient) {}
 
-  // GET ALL STUDENTS
-  getStudents(): Observable<any> {
-    return this.http.get(`${this.baseUrl}`);
+  getStudents(): Observable<Student[]> {
+    return this.http.get<Student[]>(this.baseUrl);
   }
 
-  // INSERT
-  insertStudent(data: any): Observable<any> {
+  insertStudent(data: Student) {
     return this.http.post(`${this.baseUrl}/InsertStudent`, data);
   }
 
-  // UPDATE
-  updateStudent(id: number, model: any): Observable<any> {
-    return this.http.put(`${this.baseUrl}/UpdateStudent/${id}`, model);
-  }
+ updateStudent(id: number, model: any) {
+  return this.http.put(`${this.baseUrl}/updateStudent/${id}`, model, { responseType: "text" });
+}
 
-  // DELETE
   deleteStudent(id: number): Observable<any> {
     return this.http.delete(`${this.baseUrl}/DeleteStudent/${id}`);
   }
 
-  // FILE UPLOAD
-  uploadDocument(formData: FormData): Observable<any> {
-    return this.http.post(`${this.baseUrl}/UploadDocument`, formData);
-  }
+ updateDocumentPath(id: number, filePath: string) {
+  return this.http.put(
+    `${this.baseUrl}/UpdateDocumentPath/${id}`,
+    JSON.stringify(filePath),
+    { headers: { "Content-Type": "application/json" } }
+  );
+}
 
-  // GET DEPARTMENTS
-  getDepartments(): Observable<any> {
-    return this.http.get(`${this.baseUrl}/sp_GetDepartment`);
+uploadDocument(formData: FormData) {
+  return this.http.post(`${this.baseUrl}/UploadDocument`, formData);
+}
+  getDepartments(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/sp_GetDepartment`);
   }
-
-  // CHECK DUPLICATE EMAIL
-  checkEmail(email: string): Observable<boolean> {
-    return this.http.get<boolean>(`${this.baseUrl}/check-email/${email}`);
-  }
-
-  // CHECK DUPLICATE PHONE
-  checkPhone(phone: string): Observable<boolean> {
-    return this.http.get<boolean>(`${this.baseUrl}/check-phone/${phone}`);
-  }
+ 
 }

@@ -19,34 +19,28 @@ export class StudentListComponent implements OnInit {
   }
 
   loadStudents() {
-    this.studentService.getStudents().subscribe(res => {
-      this.students = res;
-    });
+    this.studentService.getStudents().subscribe(res => this.students = res);
   }
 
   loadDepartments() {
-    this.studentService.getDepartments().subscribe((res: any[]) => {
-      this.departments = res;
-    });
+    this.studentService.getDepartments().subscribe(res => this.departments = res);
   }
 
   getDeptName(id: number): string {
-    const dept = this.departments.find(d => d.DeptID == id);
-    return dept ? dept.DeptName : "";
+    const d = this.departments.find(x => x.DeptID == id);
+    return d ? d.DeptName : "";
   }
 
-  // EDIT Redirect to form
- editStudent(s: any) {
-  localStorage.setItem("editStudent", JSON.stringify(s));
-  window.location.href = "/";  
-}
+  editStudent(s: any) {
+    localStorage.setItem("editStudent", JSON.stringify(s));
+    window.location.href = "/";
+  }
 
-  // Permanently delete row
   deleteStudent(id: number) {
-    if (confirm("Are you sure you want to delete this student?")) {
+    if (confirm("Are you sure?")) {
       this.studentService.deleteStudent(id).subscribe(() => {
-        alert("Deleted Successfully!");
-        this.loadStudents(); 
+        alert("Deleted Successfully");
+        this.loadStudents();
       });
     }
   }

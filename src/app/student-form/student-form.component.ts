@@ -1,142 +1,227 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { StudentService } from '../student.service';
+import { Student } from '../student.model';
 
 @Component({
   selector: 'app-student-form',
   templateUrl: './student-form.component.html',
   styleUrls: ['./student-form.component.css']
 })
-export class StudentFormComponent {
+export class StudentFormComponent implements OnInit {
 
-  model: any = {};
+  model: Student = {
+    studentID: 0,
+    FullName: "",
+    Email: "",
+    Phoneno: "",
+    Gender: "",
+    Department: "0",
+    Address: "",
+    AddressProf: ""
+  };
   proofList: string[] = [];
   selectedFile!: File;
-  Department: any[] = [];
+DepartmentList: any[] = [];
+emailExists: boolean = false;
+phoneExists: boolean = false;
 
-  isDuplicateEmail = false;
-  isDuplicatePhone = false;
-  isSubmitted = false;
 
   constructor(private studentService: StudentService) {}
 
- ngOnInit() {
+  ngOnInit() {
+
   const data = localStorage.getItem("editStudent");
 
   if (data) {
-    const editData = JSON.parse(data);
+    const s = JSON.parse(data);
 
-    // FIX: map backend Email → model.email
-    this.model.StudentID = editData.StudentID;
-    this.model.email = editData.Email;
-    this.model.fullName = editData.FullName;
-    this.model.phoneno = editData.Phoneno;
-    this.model.gender = editData.Gender;
-    this.model.department = editData.Department;
-    this.model.address = editData.Address;
+    console.log("Loading Edit Data:", s);  // ✔ Correct!
 
-    this.model.originalEmail = editData.Email; // IMPORTANT
+    this.model = {
+      studentID: s.studentID,
+      FullName: s.FullName ?? s.fullName,
+      Email: s.Email ?? s.email,
+      Phoneno: s.Phoneno ?? s.phoneno,
+      Gender: s.Gender ?? s.gender,
+      Department: String(s.Department ?? s.department),
+      Address: s.Address ?? s.address,
+      AddressProf: s.AddressProf ?? s.addressProf,
+      
+      CreatedAt: s.CreatedAt ?? new Date()
+    };
 
-    this.proofList = editData.AddressProf
-      ? editData.AddressProf.split(',')
+    // Load checkboxes
+    this.proofList = this.model.AddressProf
+      ? this.model.AddressProf.split(',')
       : [];
   }
 
+  // Load department list
   this.studentService.getDepartments().subscribe(res => {
-    this.Department = res;
+    this.DepartmentList = res;
   });
 }
 
 
-  toggleProof(event: any) {
-    const value = event.target.value;
+toggleProof(event: any) {
+  const value = event.target.value;
 
-    if (event.target.checked) {
-      this.proofList.push(value);
-    } else {
-      this.proofList = this.proofList.filter(x => x !== value);
-    }
+  if (event.target.checked) this.proofList.push(value);
+  else this.proofList = this.proofList.filter(x => x !== value);
 
-    this.model.AddressProf = this.proofList.join(',');
-  }
-
+  this.model.AddressProf = this.proofList.join(',');
+}
   onFileSelected(event: any) {
-    const file = event.target.files?.[0];
-    if (file) this.selectedFile = file;
+    this.selectedFile = event.target.files[0];
   }
 
   onSubmit(form: any) {
-     this.isSubmitted = true;
 
-    if (form.invalid || this.proofList.length === 0 || this.isDuplicateEmail) {
-    return; 
-    }
-
-    if (this.model.StudentID) {
-      this.updateStudent(form);
-    } else {
-      this.insertStudent(form);
-    }
+  // Validation
+  if (!this.model.FullName?.trim()) return alert("Full Name is required");
+  if (!this.model.Phoneno?.trim()) return alert("Phone Number is required");
+  if (this.model.Phoneno.length !== 10) return alert("Invalid Phone Number");
+  if (!this.model.Email?.trim()) return alert("Email is required");
+  if (!this.model.Gender) return alert("Gender is required");
+  if (!this.model.Department || this.model.Department === "") {
+    return alert("Department is required");
   }
+  if (!this.model.Address?.trim()) return alert("Address is required");
+  if (this.proofList.length === 0) return alert("Select at least one Address Proof");
 
- insertStudent(form: any) {
+  this.model.CreatedAt = new Date();
+
+  // Update or Insert
+  if (this.model.studentID) {
+    this.updateStudent(form);
+  } else {
+    this.insertStudent(form);
+  }
+}
+insertStudent(form: any) {
+
+  this.emailExists = false;
+  this.phoneExists = false;
+
   this.studentService.insertStudent(this.model).subscribe({
-    next: (res: any) => {
-      alert(res.Message);
-      if (this.selectedFile) {
-        const formData = new FormData();
-        formData.append("file", this.selectedFile);
 
-        this.studentService.uploadDocument(formData).subscribe(() => {
-          alert("Document uploaded successfully!");
-        });
+    next: (res: any) => {
+
+      const newId = res.newStudentID; // << IMPORTANT
+
+      // If no file selected → finish
+      if (!this.selectedFile) {
+        alert("Student added successfully!");
+        this.resetForm(form);
+        return;
       }
-      this.resetForm(form);
+
+      // 1️⃣ Upload File
+      const fd = new FormData();
+      fd.append("file", this.selectedFile);
+
+      this.studentService.uploadDocument(fd).subscribe((fileRes: any) => {
+
+        const filePath = fileRes.filePath; // "/Uploads/xxxx.pdf"
+
+        // 2️⃣ Update DocumentPath in DB
+        this.studentService.updateDocumentPath(newId, filePath)
+          .subscribe(() => {
+
+            alert("Student & Document added successfully!");
+            this.resetForm(form);
+          });
+
+      });
     },
 
-    error: (err: any) => {
-      alert(err.error.Message);
+    error: (err) => {
+      console.log("Insert Error:", err);
+
+      if (err.error?.message === "Email already exists") {
+        this.emailExists = true;
+        return;
+      }
+
+      if (err.error?.message === "Phone number already exists") {
+        this.phoneExists = true;
+        return;
+      }
+
+      alert("Insert failed! Check console.");
     }
   });
 }
 
+updateStudent(form: any) {
+  this.model.AddressProf = this.proofList.join(',');
+  this.model.CreatedAt = new Date();
 
-  updateStudent(form: any) {
-    this.studentService.updateStudent(this.model.StudentID, this.model)
-      .subscribe(() => {
-        alert("Updated Successfully!");
-        this.resetForm(form);
-      });
-  }
+  console.log("UPDATE STARTED -> ID:", this.model.studentID);
 
-checkEmail() {
-  if (!this.model.email) return;
+  this.studentService.updateStudent(this.model.studentID, this.model)
+    .subscribe({
+      next: (res: any) => {
+        console.log("UPDATE SUCCESS", res);
+        if (!this.selectedFile) {
+          alert("Updated Successfully!");
+          this.resetForm(form);
+          localStorage.removeItem("editStudent");
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", this.selectedFile);
 
-  this.studentService.checkEmail(this.model.email)
-    .subscribe((exists: boolean) => {
-      if (this.model.StudentID && this.model.originalEmail === this.model.email) {
-        this.isDuplicateEmail = false;
-        return;
+        this.studentService.uploadDocument(fd).subscribe({
+          next: (fileRes: any) => {
+            const filePath = fileRes.filePath;
+            this.studentService.updateDocumentPath(this.model.studentID, filePath)
+              .subscribe({
+                next: () => {
+                  alert("Updated Successfully (including document)!");
+                  this.resetForm(form);
+                  localStorage.removeItem("editStudent");
+                }
+              });
+          },
+          error: (err) => {
+            console.error("Document upload failed:", err);
+            alert("Student updated, but document upload failed!");
+          }
+        });
+      },
+
+      error: (err) => {
+        console.error("UPDATE ERROR", err);
+
+        
+        if (err.error?.message === "Email already exists") {
+          alert("Email already exists!");
+          return;
+        }
+
+        if (err.error?.message === "Phone number already exists") {
+          alert("Phone number already exists!");
+          return;
+        }
+
+        alert("Update failed! Check console.");
       }
-      this.isDuplicateEmail = exists;
     });
 }
+editStudent(s: any) {
+  console.log("Selected Student For Edit:", s);
 
-  checkPhone() {
-    if (!this.model.Phoneno) return;
+  localStorage.setItem("editStudent", JSON.stringify(s));
 
-    this.studentService.checkPhone(this.model.Phoneno)
-      .subscribe(exists => {
-        this.isDuplicatePhone = exists;
-      });
-  }
+  // Navigate to form
+  window.location.href = "/";
+}
 
   resetForm(form: any) {
     form.reset();
-    this.model = {};
     this.proofList = [];
     this.selectedFile = undefined!;
-    this.isSubmitted = false;
-
     localStorage.removeItem("editStudent");
   }
 }
