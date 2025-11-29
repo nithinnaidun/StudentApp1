@@ -10,13 +10,16 @@ export class StudentListComponent implements OnInit {
 
   students: any[] = [];
   departments: any[] = [];
-
+  selectedFiles: File[] = [];
   constructor(private studentService: StudentService) {}
 
   ngOnInit(): void {
     this.loadStudents();
     this.loadDepartments();
   }
+  onFileSelected(event: any) {
+  this.selectedFiles = Array.from(event.target.files);
+}
 
   loadStudents() {
     this.studentService.getStudents().subscribe(res => this.students = res);

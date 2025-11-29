@@ -27,17 +27,16 @@ export class StudentService {
   deleteStudent(id: number): Observable<any> {
     return this.http.delete(`${this.baseUrl}/DeleteStudent/${id}`);
   }
-
- updateDocumentPath(id: number, filePath: string) {
-  return this.http.put(
-    `${this.baseUrl}/UpdateDocumentPath/${id}`,
-    JSON.stringify(filePath),
-    { headers: { "Content-Type": "application/json" } }
-  );
+uploadDocument(fd: FormData) {
+  return this.http.post(this.baseUrl + "/UploadDocument", fd);
 }
 
-uploadDocument(formData: FormData) {
-  return this.http.post(`${this.baseUrl}/UploadDocument`, formData);
+
+updateDocumentPath(id: number, path: string) {
+  return this.http.put(
+    this.baseUrl + "/UpdateDocumentPath/" + id,JSON.stringify(path), 
+    { headers: { "Content-Type": "application/json" } }
+  );
 }
   getDepartments(): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/sp_GetDepartment`);

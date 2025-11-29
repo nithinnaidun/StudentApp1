@@ -40,7 +40,8 @@
         <!-- File Upload -->
         <div class="form-group">
           <label>Upload Document</label>
-          <input type="file" (change)="onFileSelected($event)" accept=".pdf,.jpg,.png">
+          <input type="file" multiple="true" (change)="onFileSelected($event)" accept=".pdf,.jpg,.png" >
+         
         </div>
 
       </div>
