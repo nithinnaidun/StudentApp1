@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { StudentService } from '../student.service';
 import { Student } from '../student.model';
+import { finalize } from 'rxjs/operators';
 
 @Component({
   selector: 'app-student-form',
@@ -25,35 +26,37 @@ export class StudentFormComponent implements OnInit {
   DepartmentList: any[] = [];
   emailExists: boolean = false;
   phoneExists: boolean = false;
+  isProcessing: boolean = false;
 
   constructor(private studentService: StudentService) {}
 
   ngOnInit() {
-    const data = localStorage.getItem("editStudent");
+    // optional quick AES test (if you want)
+    try { this.studentService.testAES?.(); } catch { /* ignore */ }
 
+    const data = localStorage.getItem("editStudent");
     if (data) {
-      const s = JSON.parse(data);
+      const s: any = JSON.parse(data);
 
       this.model = {
         studentID: s.studentID,
-        FullName: s.FullName ?? s.fullName,
-        Email: s.Email ?? s.email,
-        Phoneno: s.Phoneno ?? s.phoneno,
-        Gender: s.Gender ?? s.gender,
-        Department: String(s.Department ?? s.department),
-        Address: s.Address ?? s.address,
-        AddressProf: s.AddressProf ?? s.addressProf,
+        FullName: s.FullName ?? s.fullName ?? "",
+        Email: s.Email ?? s.email ?? "",
+        Phoneno: s.Phoneno ?? s.phoneno ?? "",
+        Gender: s.Gender ?? s.gender ?? "",
+        Department: String(s.Department ?? s.department ?? "0"),
+        Address: s.Address ?? s.address ?? "",
+        AddressProf: s.AddressProf ?? s.addressProf ?? "",
         CreatedAt: s.CreatedAt ?? new Date()
       };
 
-      this.proofList = this.model.AddressProf
-        ? this.model.AddressProf.split(',')
-        : [];
+      this.proofList = this.model.AddressProf ? this.model.AddressProf.split(',') : [];
     }
 
-    this.studentService.getDepartments().subscribe(res => {
-      this.DepartmentList = res;
-    });
+    this.studentService.getDepartments().subscribe(
+      res => this.DepartmentList = res,
+      err => console.error("Failed to load departments", err)
+    );
   }
 
   toggleProof(event: any) {
@@ -64,102 +67,217 @@ export class StudentFormComponent implements OnInit {
   }
 
   onFileSelected(event: any) {
-    this.selectedFiles = event.target.files;
+    const files = event.target?.files as FileList | null;
+    if (files && files.length > 0) {
+      this.selectedFiles = files;
+      console.log('Files selected:', files);
+    } else {
+      this.selectedFiles = undefined!;
+    }
   }
 
   onSubmit(form: any) {
-    if (!this.model.FullName.trim()) return alert("Full Name is required");
-    if (!this.model.Phoneno.trim()) return alert("Phone Number is required");
+    // validation
+    if (!this.model.FullName?.trim()) return alert("Full Name is required");
+    if (!this.model.Phoneno?.trim()) return alert("Phone Number is required");
     if (this.model.Phoneno.length !== 10) return alert("Invalid Phone Number");
-    if (!this.model.Email.trim()) return alert("Email is required");
+    if (!this.model.Email?.trim()) return alert("Email is required");
     if (!this.model.Gender) return alert("Gender is required");
-    if (!this.model.Department) return alert("Department is required");
-    if (!this.model.Address.trim()) return alert("Address is required");
+    if (!this.model.Department || this.model.Department === "") return alert("Department is required");
+    if (!this.model.Address?.trim()) return alert("Address is required");
     if (this.proofList.length === 0) return alert("Select at least one Address Proof");
 
     this.model.CreatedAt = new Date();
 
-    if (this.model.studentID) {
+    if (this.model.studentID && this.model.studentID > 0) {
       this.updateStudent(form);
     } else {
       this.insertStudent(form);
     }
   }
-insertStudent(form: any) {
 
-  this.studentService.insertStudent(this.model).subscribe({
-    next: (res: any) => {
+  // ---------- INSERT ----------
+  insertStudent(form: any) {
+    this.emailExists = false;
+    this.phoneExists = false;
+    this.isProcessing = true;
 
-      const newId = res.newStudentID;
+    this.studentService.insertStudent(this.model).pipe(
+      finalize(()=> this.isProcessing = false)
+    ).subscribe({
+      next: (res: any) => {
+        const newId = res?.newStudentID;
+        console.log("Inserted new student id:", newId);
 
-      if (!this.selectedFiles || this.selectedFiles.length === 0) {
-        alert("Student added successfully!");
-        this.resetForm(form);
-        return;
-      }
-
-   let fd = new FormData();
-
-for (let i = 0; i < this.selectedFiles.length; i++) {
-  fd.append("files", this.selectedFiles[i]);
-}
-
-this.studentService.uploadDocument(fd).subscribe((fileRes: any) => {
-
-  const filePaths = fileRes.filePaths; 
-  const allPaths = filePaths.join(',');
-  this.studentService.updateDocumentPath(newId, filePaths.join(','))
-    .subscribe(() => {
-      alert("Student & all documents saved!");
-      this.resetForm(form);
-    });
-    });
-    },
-    error: () => alert("Insert failed!")
-  });
-}
-
- updateStudent(form: any) {
-
-  this.model.AddressProf = this.proofList.join(',');
-  this.model.CreatedAt = new Date();
-  this.studentService.updateStudent(this.model.studentID, this.model)
-    .subscribe({
-      next: () => {
+        // if no files selected -> done
         if (!this.selectedFiles || this.selectedFiles.length === 0) {
-          alert("Updated Successfully!");
+          alert("Student added successfully!");
           this.resetForm(form);
           return;
         }
 
-        let uploadedPaths: string[] = [];
-        const uploadNext = (i: number) => {
-          if (i >= this.selectedFiles.length) {
-            this.studentService.updateDocumentPath(
-              this.model.studentID,
-              uploadedPaths.join(',')
-            ).subscribe(() => {
-              alert("Updated Successfully including documents!");
-              this.resetForm(form);
-            });
-            return;
-          }
-
-          const fd = new FormData();
+        // prepare FormData (key "files" expected by backend)
+        const fd = new FormData();
+        for (let i = 0; i < this.selectedFiles.length; i++) {
           fd.append("files", this.selectedFiles[i]);
+        }
 
-          this.studentService.uploadDocument(fd)
-            .subscribe((fileRes: any) => {
-              uploadedPaths.push(fileRes.filePaths[0]);
-              uploadNext(i + 1);
+        // upload files (backend returns { filePaths: [...] })
+        this.studentService.uploadDocument(fd).subscribe({
+          next: (fileRes: any) => {
+            const filePaths: string[] = fileRes?.filePaths ?? [];
+            if (filePaths.length === 0) {
+              console.error("Upload returned no paths", fileRes);
+              alert("Files uploaded but server returned no paths.");
+              return;
+            }
+
+            // save CSV of paths to DB
+            const csv = filePaths.join(',');
+            this.studentService.updateDocumentPath(newId, csv).subscribe({
+              next: () => {
+                alert("Student & all documents saved!");
+                this.resetForm(form);
+              },
+              error: (err) => {
+                console.error("Failed to update document path", err);
+                alert("Student added but saving document paths failed.");
+              }
             });
-        };
-        uploadNext(0);
+          },
+          error: (err) => {
+            console.error("File upload failed:", err);
+            alert("Student added, but file upload failed.");
+          }
+        });
       },
 
-      error: () => alert("Update failed!")
+      error: (err) => {
+        console.error("Insert Error:", err);
+        if (err.error?.message === "Email already exists") {
+          this.emailExists = true;
+          return;
+        }
+        if (err.error?.message === "Phone number already exists") {
+          this.phoneExists = true;
+          return;
+        }
+        alert("Insert failed! Check console.");
+      }
     });
-}
+  }
+
+  // ---------- UPDATE ----------
+  updateStudent(form: any) {
+    this.model.AddressProf = this.proofList.join(',');
+    this.model.CreatedAt = new Date();
+    this.isProcessing = true;
+
+    this.studentService.updateStudent(this.model.studentID, this.model).pipe(
+      finalize(()=> this.isProcessing = false)
+    ).subscribe({
+      next: (res: any) => {
+        // if no files selected -> done
+        if (!this.selectedFiles || this.selectedFiles.length === 0) {
+          alert("Updated successfully!");
+          this.resetForm(form);
+          localStorage.removeItem("editStudent");
+          return;
+        }
+
+        // upload each file using same multiple-files endpoint
+        const fd = new FormData();
+        for (let i = 0; i < this.selectedFiles.length; i++) {
+          fd.append("files", this.selectedFiles[i]);
+        }
+
+        this.studentService.uploadDocument(fd).subscribe({
+          next: (fileRes: any) => {
+            const filePaths: string[] = fileRes?.filePaths ?? [];
+            if (filePaths.length === 0) {
+              console.error("Upload returned no paths", fileRes);
+              alert("Files uploaded but server returned no paths.");
+              return;
+            }
+
+            const csv = filePaths.join(',');
+            this.studentService.updateDocumentPath(this.model.studentID, csv).subscribe({
+              next: () => {
+                alert("Updated successfully including documents!");
+                this.resetForm(form);
+                localStorage.removeItem("editStudent");
+              },
+              error: (err) => {
+                console.error("Failed to update document path", err);
+                alert("Update succeeded but saving document paths failed.");
+              }
+            });
+          },
+          error: (err) => {
+            console.error("File upload failed:", err);
+            alert("Update succeeded, but file upload failed.");
+          }
+        });
+      },
+      error: (err) => {
+        console.error("Update Error:", err);
+        if (err.error?.message === "Email already exists") {
+          alert("Email already exists!");
+          return;
+        }
+        if (err.error?.message === "Phone number already exists") {
+          alert("Phone number already exists!");
+          return;
+        }
+        alert("Update failed! Check console.");
+      }
+    });
+  }
+
+  // ---------- UPLOAD TO S3 (uses encrypted AWS keys from backend) ----------
+  uploadFilesToS3() {
+    if (!this.selectedFiles || this.selectedFiles.length === 0) {
+      return alert("Please select files first.");
+    }
+
+    this.studentService.getAwsKeys().subscribe({
+      next: (res: any) => {
+        // NOTE: your StudentService.decryptAES(cipherText) should exist
+        // It decrypts using client-side AES key/iv you defined in service.
+        try {
+          const accessKeyEnc = res?.accessKey;
+          const secretKeyEnc = res?.secretKey;
+          const bucketEnc = res?.bucketName;
+
+          const accessKey = this.studentService.decryptAES(accessKeyEnc);
+          const secretKey = this.studentService.decryptAES(secretKeyEnc);
+          const bucketName = this.studentService.decryptAES(bucketEnc);
+
+          console.log("Decrypted AWS access:", accessKey);
+          console.log("Decrypted AWS secret:", secretKey);
+          console.log("Decrypted bucket:", bucketName);
+
+          const fd = new FormData();
+          for (let i = 0; i < this.selectedFiles.length; i++) {
+            fd.append("files", this.selectedFiles[i]);
+          }
+
+          this.studentService.uploadToS3(fd, accessKey, secretKey, bucketName)
+            .subscribe({
+              next: (uploadRes) => console.log("S3 upload response:", uploadRes),
+              error: (err) => console.error("S3 upload error:", err)
+            });
+        } catch (ex) {
+          console.error("Failed decrypting AWS keys", ex);
+          alert("Failed to decrypt AWS keys. Check console.");
+        }
+      },
+      error: err => {
+        console.error("Failed to get AWS keys", err);
+        alert("Failed to retrieve AWS keys.");
+      }
+    });
+  }
 
   editStudent(s: any) {
     localStorage.setItem("editStudent", JSON.stringify(s));
@@ -169,6 +287,7 @@ this.studentService.uploadDocument(fd).subscribe((fileRes: any) => {
   resetForm(form: any) {
     form.reset();
     this.proofList = [];
+    this.selectedFiles = undefined!;
     localStorage.removeItem("editStudent");
   }
 }
