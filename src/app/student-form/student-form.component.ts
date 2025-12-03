@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { StudentService } from '../student.service';
 import { Student } from '../student.model';
-import { finalize } from 'rxjs/operators';
+import * as CryptoJS from 'crypto-js';
 
 @Component({
   selector: 'app-student-form',
@@ -22,261 +22,175 @@ export class StudentFormComponent implements OnInit {
   };
 
   proofList: string[] = [];
-  selectedFiles!: FileList;
+  selectedFile!: File;
   DepartmentList: any[] = [];
-  emailExists: boolean = false;
-  phoneExists: boolean = false;
-  isProcessing: boolean = false;
+
+  emailExists = false;
+  phoneExists = false;
+
+  awsAccessKey: any;
+  awsSecretKey: any;
+  awsBucketName = "btsworkerfiles";
 
   constructor(private studentService: StudentService) {}
 
   ngOnInit() {
-    // optional quick AES test (if you want)
-    try { this.studentService.testAES?.(); } catch { /* ignore */ }
 
+    // Load ACCESS Key
+    this.studentService.getAWSAccessKey().subscribe(res => {
+      console.log("Encrypted Access Key:", res);
+      this.awsAccessKey = this.decrypt(res);
+      console.log("Decrypted Access Key:", this.awsAccessKey);
+    });
+
+    // Load SECRET Key
+    this.studentService.getAWSSecretKey().subscribe(res => {
+      console.log("Encrypted Secret Key:", res);
+      this.awsSecretKey = this.decrypt(res);
+      console.log("Decrypted Secret Key:", this.awsSecretKey);
+    });
+
+    // Load edit student
     const data = localStorage.getItem("editStudent");
+
     if (data) {
-      const s: any = JSON.parse(data);
+      const s = JSON.parse(data);
 
       this.model = {
         studentID: s.studentID,
-        FullName: s.FullName ?? s.fullName ?? "",
-        Email: s.Email ?? s.email ?? "",
-        Phoneno: s.Phoneno ?? s.phoneno ?? "",
-        Gender: s.Gender ?? s.gender ?? "",
-        Department: String(s.Department ?? s.department ?? "0"),
-        Address: s.Address ?? s.address ?? "",
-        AddressProf: s.AddressProf ?? s.addressProf ?? "",
+        FullName: s.FullName ?? s.fullName,
+        Email: s.Email ?? s.email,
+        Phoneno: s.Phoneno ?? s.phoneno,
+        Gender: s.Gender ?? s.gender,
+        Department: String(s.Department ?? s.department),
+        Address: s.Address ?? s.address,
+        AddressProf: s.AddressProf ?? s.addressProf,
         CreatedAt: s.CreatedAt ?? new Date()
       };
 
-      this.proofList = this.model.AddressProf ? this.model.AddressProf.split(',') : [];
+      this.proofList = this.model.AddressProf ? this.model.AddressProf.split(",") : [];
     }
 
-    this.studentService.getDepartments().subscribe(
-      res => this.DepartmentList = res,
-      err => console.error("Failed to load departments", err)
-    );
+    // Load department list
+    this.studentService.getDepartments().subscribe(res => {
+      this.DepartmentList = res;
+    });
   }
 
+  // Toggle checkboxes
   toggleProof(event: any) {
     const value = event.target.value;
     if (event.target.checked) this.proofList.push(value);
     else this.proofList = this.proofList.filter(x => x !== value);
+
     this.model.AddressProf = this.proofList.join(',');
   }
 
   onFileSelected(event: any) {
-    const files = event.target?.files as FileList | null;
-    if (files && files.length > 0) {
-      this.selectedFiles = files;
-      console.log('Files selected:', files);
-    } else {
-      this.selectedFiles = undefined!;
-    }
+    this.selectedFile = event.target.files[0];
   }
 
+  decrypt(encryptedText: string): string {
+    const key = CryptoJS.enc.Utf8.parse('NLKpQsoPaeoZ55ul');
+    const iv = CryptoJS.enc.Utf8.parse('RbeqxtNXxucHI123');
+
+    const decrypted = CryptoJS.AES.decrypt(encryptedText, key, {
+      iv: iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    });
+    
+    return decrypted.toString(CryptoJS.enc.Utf8);
+  }
+
+  // Upload to S3
+  uploadToS3(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.selectedFile) return reject("No file selected!");
+
+      const fd = new FormData();
+      fd.append("file", this.selectedFile);
+
+      this.studentService.uploadToS3(
+        fd,
+        this.awsAccessKey,
+        this.awsSecretKey,
+        this.awsBucketName
+      ).subscribe({
+        next: (res: any) => {
+          console.log("S3 Upload Success:", res);
+          resolve(res.filePath);
+        },
+        error: (err) => {
+          console.error("S3 Upload Error:", err);
+          console.log("Validation Errors:", err.error.errors);
+          console.log("About to upload to S3 with headers:", {
+          awsAccess: this.awsAccessKey,
+          awsSecret: this.awsSecretKey,
+          awsBucket: this.awsBucketName
+});
+console.log("Selected file:", this.selectedFile?.name, "size:", this.selectedFile?.size);
+          reject(err);
+        }
+      });
+    });
+  }
+
+  // Submit
   onSubmit(form: any) {
-    // validation
-    if (!this.model.FullName?.trim()) return alert("Full Name is required");
-    if (!this.model.Phoneno?.trim()) return alert("Phone Number is required");
-    if (this.model.Phoneno.length !== 10) return alert("Invalid Phone Number");
-    if (!this.model.Email?.trim()) return alert("Email is required");
-    if (!this.model.Gender) return alert("Gender is required");
-    if (!this.model.Department || this.model.Department === "") return alert("Department is required");
-    if (!this.model.Address?.trim()) return alert("Address is required");
-    if (this.proofList.length === 0) return alert("Select at least one Address Proof");
+
+    if (!this.model.FullName?.trim()) return alert("Full Name required");
+    if (!this.model.Email?.trim()) return alert("Email required");
+    if (!this.model.Phoneno?.trim()) return alert("Phone required");
+    if (this.proofList.length === 0) return alert("Select at least one proof");
 
     this.model.CreatedAt = new Date();
 
-    if (this.model.studentID && this.model.studentID > 0) {
+    if (this.model.studentID)
       this.updateStudent(form);
-    } else {
+    else
       this.insertStudent(form);
+  }
+
+  // Insert
+  async insertStudent(form: any) {
+    try {
+      if (this.selectedFile)
+        this.model.DocumentPath = await this.uploadToS3();
+
+      this.studentService.insertStudent(this.model).subscribe({
+        next: () => {
+          alert("Inserted Successfully!");
+          this.resetForm(form);
+        },
+        error: (err) => console.error(err)
+      });
+
+    } catch (err) {
+      alert("File upload failed!");
     }
   }
 
-  // ---------- INSERT ----------
-  insertStudent(form: any) {
-    this.emailExists = false;
-    this.phoneExists = false;
-    this.isProcessing = true;
+  // Update
+  async updateStudent(form: any) {
 
-    this.studentService.insertStudent(this.model).pipe(
-      finalize(()=> this.isProcessing = false)
-    ).subscribe({
-      next: (res: any) => {
-        const newId = res?.newStudentID;
-        console.log("Inserted new student id:", newId);
+    try {
+      if (this.selectedFile)
+        this.model.DocumentPath = await this.uploadToS3();
 
-        // if no files selected -> done
-        if (!this.selectedFiles || this.selectedFiles.length === 0) {
-          alert("Student added successfully!");
-          this.resetForm(form);
-          return;
-        }
-
-        // prepare FormData (key "files" expected by backend)
-        const fd = new FormData();
-        for (let i = 0; i < this.selectedFiles.length; i++) {
-          fd.append("files", this.selectedFiles[i]);
-        }
-
-        // upload files (backend returns { filePaths: [...] })
-        this.studentService.uploadDocument(fd).subscribe({
-          next: (fileRes: any) => {
-            const filePaths: string[] = fileRes?.filePaths ?? [];
-            if (filePaths.length === 0) {
-              console.error("Upload returned no paths", fileRes);
-              alert("Files uploaded but server returned no paths.");
-              return;
-            }
-
-            // save CSV of paths to DB
-            const csv = filePaths.join(',');
-            this.studentService.updateDocumentPath(newId, csv).subscribe({
-              next: () => {
-                alert("Student & all documents saved!");
-                this.resetForm(form);
-              },
-              error: (err) => {
-                console.error("Failed to update document path", err);
-                alert("Student added but saving document paths failed.");
-              }
-            });
-          },
-          error: (err) => {
-            console.error("File upload failed:", err);
-            alert("Student added, but file upload failed.");
+      this.studentService.updateStudent(this.model.studentID, this.model)
+        .subscribe({
+          next: () => {
+            alert("Updated Successfully!");
+            this.resetForm(form);
+            localStorage.removeItem("editStudent");
           }
         });
-      },
 
-      error: (err) => {
-        console.error("Insert Error:", err);
-        if (err.error?.message === "Email already exists") {
-          this.emailExists = true;
-          return;
-        }
-        if (err.error?.message === "Phone number already exists") {
-          this.phoneExists = true;
-          return;
-        }
-        alert("Insert failed! Check console.");
-      }
-    });
-  }
-
-  // ---------- UPDATE ----------
-  updateStudent(form: any) {
-    this.model.AddressProf = this.proofList.join(',');
-    this.model.CreatedAt = new Date();
-    this.isProcessing = true;
-
-    this.studentService.updateStudent(this.model.studentID, this.model).pipe(
-      finalize(()=> this.isProcessing = false)
-    ).subscribe({
-      next: (res: any) => {
-        // if no files selected -> done
-        if (!this.selectedFiles || this.selectedFiles.length === 0) {
-          alert("Updated successfully!");
-          this.resetForm(form);
-          localStorage.removeItem("editStudent");
-          return;
-        }
-
-        // upload each file using same multiple-files endpoint
-        const fd = new FormData();
-        for (let i = 0; i < this.selectedFiles.length; i++) {
-          fd.append("files", this.selectedFiles[i]);
-        }
-
-        this.studentService.uploadDocument(fd).subscribe({
-          next: (fileRes: any) => {
-            const filePaths: string[] = fileRes?.filePaths ?? [];
-            if (filePaths.length === 0) {
-              console.error("Upload returned no paths", fileRes);
-              alert("Files uploaded but server returned no paths.");
-              return;
-            }
-
-            const csv = filePaths.join(',');
-            this.studentService.updateDocumentPath(this.model.studentID, csv).subscribe({
-              next: () => {
-                alert("Updated successfully including documents!");
-                this.resetForm(form);
-                localStorage.removeItem("editStudent");
-              },
-              error: (err) => {
-                console.error("Failed to update document path", err);
-                alert("Update succeeded but saving document paths failed.");
-              }
-            });
-          },
-          error: (err) => {
-            console.error("File upload failed:", err);
-            alert("Update succeeded, but file upload failed.");
-          }
-        });
-      },
-      error: (err) => {
-        console.error("Update Error:", err);
-        if (err.error?.message === "Email already exists") {
-          alert("Email already exists!");
-          return;
-        }
-        if (err.error?.message === "Phone number already exists") {
-          alert("Phone number already exists!");
-          return;
-        }
-        alert("Update failed! Check console.");
-      }
-    });
-  }
-
-  // ---------- UPLOAD TO S3 (uses encrypted AWS keys from backend) ----------
-  uploadFilesToS3() {
-    if (!this.selectedFiles || this.selectedFiles.length === 0) {
-      return alert("Please select files first.");
+    } catch (err) {
+      console.error(err);
+      alert("Updated but file upload failed.");
     }
-
-    this.studentService.getAwsKeys().subscribe({
-      next: (res: any) => {
-        // NOTE: your StudentService.decryptAES(cipherText) should exist
-        // It decrypts using client-side AES key/iv you defined in service.
-        try {
-          const accessKeyEnc = res?.accessKey;
-          const secretKeyEnc = res?.secretKey;
-          const bucketEnc = res?.bucketName;
-
-          const accessKey = this.studentService.decryptAES(accessKeyEnc);
-          const secretKey = this.studentService.decryptAES(secretKeyEnc);
-          const bucketName = this.studentService.decryptAES(bucketEnc);
-
-          console.log("Decrypted AWS access:", accessKey);
-          console.log("Decrypted AWS secret:", secretKey);
-          console.log("Decrypted bucket:", bucketName);
-
-          const fd = new FormData();
-          for (let i = 0; i < this.selectedFiles.length; i++) {
-            fd.append("files", this.selectedFiles[i]);
-          }
-
-          this.studentService.uploadToS3(fd, accessKey, secretKey, bucketName)
-            .subscribe({
-              next: (uploadRes) => console.log("S3 upload response:", uploadRes),
-              error: (err) => console.error("S3 upload error:", err)
-            });
-        } catch (ex) {
-          console.error("Failed decrypting AWS keys", ex);
-          alert("Failed to decrypt AWS keys. Check console.");
-        }
-      },
-      error: err => {
-        console.error("Failed to get AWS keys", err);
-        alert("Failed to retrieve AWS keys.");
-      }
-    });
   }
 
   editStudent(s: any) {
@@ -287,7 +201,7 @@ export class StudentFormComponent implements OnInit {
   resetForm(form: any) {
     form.reset();
     this.proofList = [];
-    this.selectedFiles = undefined!;
+    this.selectedFile = undefined!;
     localStorage.removeItem("editStudent");
   }
 }
