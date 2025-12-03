@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace StudentApplication.Controllers.Models
 {
@@ -12,10 +12,12 @@ namespace StudentApplication.Controllers.Models
 
         public string Phoneno { get; set; }
         public string Gender { get; set; }
-        public string Department { get; set; }
+        public int Department { get; set; }
         public string Address { get; set; }
         public string AddressProf { get; set; }
+        public string? DocumentPath { get; set; }
         public DateTime CreatedAt { get; set; }
        
     }
 }
+

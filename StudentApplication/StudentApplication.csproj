@@ -7,6 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.13.1" />
+    <PackageReference Include="AWSSDK.S3Control" Version="4.0.7.6" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3" />
     <PackageReference Include="Microsoft.SqlServer.Server" Version="1.0.0" />
     <PackageReference Include="runtime.native.System.Data.SqlClient.sni" Version="4.7.0" />
