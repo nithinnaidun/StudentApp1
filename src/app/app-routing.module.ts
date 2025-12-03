@@ -6,7 +6,7 @@ import { StudentListComponent } from './student-list/student-list.component';
 
 const routes: Routes = [
   { path: '', component: StudentFormComponent , title:'Home Page'},  
-  { path: 'students', component: StudentListComponent , title:'Edit StudentDetails' } 
+  { path: 'students', component: StudentListComponent} 
 ];
 
 @NgModule({

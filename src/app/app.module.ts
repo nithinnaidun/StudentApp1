@@ -8,17 +8,21 @@ import { AppComponent } from './app.component';
 import { StudentFormComponent } from './student-form/student-form.component';
 import { StudentListComponent } from './student-list/student-list.component';
 
+
+
 @NgModule({
   declarations: [
     AppComponent,
     StudentFormComponent,
-    StudentListComponent,
+    StudentListComponent
+    
   ],
   imports: [
     BrowserModule,
     FormsModule,          
     HttpClientModule,     
-    AppRoutingModule
+    AppRoutingModule,
+    
   ],
   providers: [],
   bootstrap: [AppComponent]
