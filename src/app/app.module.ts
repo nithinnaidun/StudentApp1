@@ -7,6 +7,7 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { StudentFormComponent } from './student-form/student-form.component';
 import { StudentListComponent } from './student-list/student-list.component';
+import { SafeUrlPipe } from './safe-url.pipe';
 
 
 
@@ -14,8 +15,7 @@ import { StudentListComponent } from './student-list/student-list.component';
   declarations: [
     AppComponent,
     StudentFormComponent,
-    StudentListComponent
-    
+    StudentListComponent,SafeUrlPipe
   ],
   imports: [
     BrowserModule,
@@ -23,8 +23,11 @@ import { StudentListComponent } from './student-list/student-list.component';
     HttpClientModule,     
     AppRoutingModule,
     
+    
   ],
   providers: [],
   bootstrap: [AppComponent]
 })
 export class AppModule { }
+
+ 

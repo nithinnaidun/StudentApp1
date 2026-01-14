@@ -1,88 +1,78 @@
 import { Injectable } from '@angular/core';
-import { HttpClient,HttpHeaders  } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable, Subject, tap } from 'rxjs';
 import { Student } from './student.model';
-import * as CryptoJS from 'crypto-js';
-
+import* as CryptoJS from 'crypto-js';
 
 @Injectable({
   providedIn: 'root'
 })
 export class StudentService {
- 
-  private baseUrl = "https://localhost:7099/api/Student";
+  private _refreshNeededs$ = new Subject<void>();
 
-  constructor(private http: HttpClient) { }
-
-  getStudents(): Observable<Student[]> {
-    return this.http.get<Student[]>(this.baseUrl);
+  get_refreshNeededs() {
+    return this._refreshNeededs$.asObservable();
   }
 
-  insertStudent(data: Student) {
-    return this.http.post(`${this.baseUrl}/InsertStudent`, data);
+  private baseUrl = 'https://localhost:7099/api/Demo';
+
+  constructor(private http: HttpClient) {}
+
+  getAllStudents() {
+    return this.http.get<any[]>(`${this.baseUrl}/GetAllStudents`);
   }
 
-  updateStudent(id: number, model: any) {
-    return this.http.put(`${this.baseUrl}/updateStudent/${id}`, model, {
-      responseType: "text"
-    });
-  }
-
-  deleteStudent(id: number): Observable<any> {
-    return this.http.delete(`${this.baseUrl}/DeleteStudent/${id}`);
-  }
-
-  uploadDocument(fd: FormData) {
-    return this.http.post(this.baseUrl + "/UploadDocument", fd);
-  }
-
-  updateDocumentPath(id: number, path: string) {
-    return this.http.put(
-      this.baseUrl + "/UpdateDocumentPath/" + id,
-      JSON.stringify(path),
-      { headers: { "Content-Type": "application/json" } }
-    );
-  }
-  getDepartments(): Observable<any[]> {
+  getDepartments() {
     return this.http.get<any[]>(`${this.baseUrl}/sp_GetDepartment`);
   }
 
-  getAwsKeys() {
-    return this.http.get("https://localhost:7099/api/Student/GetAwsKeys");
+  insertStudent(student: Student) {
+    return this.http.post<{ StudentId: number }>(`${this.baseUrl}/InsertStudent`, student).pipe(
+        tap(() => this._refreshNeededs$.next()));
   }
 
-uploadToS3(fileData: FormData, access: string, secret: string, bucket: string) {
+  updateStudent(id: number, data: Student) {
+    return this.http.put(`${this.baseUrl}/UpdateStudent/${id}`, data, {
+      headers: { 'Content-Type': 'application/json' }}).pipe(
+      tap(() => this._refreshNeededs$.next()));
+  }
 
-  console.log("uploadToS3 called with:", { access, secret, bucket, fileData });
+  deleteStudent(id: number) {
+    return this.http.delete(`${this.baseUrl}/DeleteStudent/${id}`).pipe(
+        tap(() => this._refreshNeededs$.next()));
+  }
 
-  const headers = new HttpHeaders()
-    .set("awsAccess", access)
-    .set("awsSecret", secret)
-    .set("awsBucket", bucket);
+  uploadToS3(studentId: number, fd: FormData) {
+    return this.http.post<{ Files: string[] }>(`${this.baseUrl}/UploadToS3/${studentId}`, fd);
+  }
 
-  return this.http.post(
-    "https://localhost:7099/api/Student/UploadToS3",
-    fileData,
-    { headers }
+  // getDocumentFromS3(key: string) {
+  //   return this.http.get<{ downloadUrl: string }>(
+  //     `${this.baseUrl}/GetS3DocumentFile?key=${encodeURIComponent(key)}`
+  //   );
+  // }
+  getS3DocumentFile(fileValue: string) {
+  return this.http.get<{ downloadUrl: string }>(
+    `https://localhost:7099/api/Demo/GetS3DocumentFile`,
+    {
+      params: { fileValue }
+    }
   );
 }
 
 
-
+  getAWSAccessKey(): Observable<string> {
+  return this.http.get(
+    'https://external.balajitransports.in/api/DBConnectionString/GetAmazons3CredentialsS3AccessKey',
+    { responseType: 'text' }
+  );
+}
 
 getAWSSecretKey(): Observable<string> {
   return this.http.get(
-    "https://external.balajitransports.in/api/DBConnectionString/GetAmazons3CredentialsS3SecretKey",
+    'https://external.balajitransports.in/api/DBConnectionString/GetAmazons3CredentialsS3SecretKey',
     { responseType: 'text' }
   );
 }
-
-getAWSAccessKey(): Observable<string> {
-  return this.http.get(
-    "https://external.balajitransports.in/api/DBConnectionString/GetAmazons3CredentialsS3AccessKey",
-    { responseType: 'text' }
-  );
-}
-
 
 }

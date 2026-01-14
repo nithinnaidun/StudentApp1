@@ -1,6 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { StudentService } from '../student.service';
+import { Router } from '@angular/router';
 import { Student } from '../student.model';
+import { ChangeDetectorRef } from '@angular/core';
 import * as CryptoJS from 'crypto-js';
 
 @Component({
@@ -12,196 +14,188 @@ export class StudentFormComponent implements OnInit {
 
   model: Student = {
     studentID: 0,
-    FullName: "",
-    Email: "",
-    Phoneno: "",
-    Gender: "",
-    Department: "0",
-    Address: "",
-    AddressProf: ""
+    FullName: '',
+    Email: '',
+    Phoneno: '',
+    Gender: '',
+    Department: '',
+    Address: '',
+    AddressProf: ''
   };
 
+  awsAccessKey = '';
+  awsSecretKey = '';
+
+  departments: any[] = [];
   proofList: string[] = [];
-  selectedFile!: File;
-  DepartmentList: any[] = [];
+  selectedFiles: File[] = [];
 
-  emailExists = false;
-  phoneExists = false;
+  constructor(
+    private studentService: StudentService,
+    private router: Router,
+    private cdr: ChangeDetectorRef
+  ) {}
 
-  awsAccessKey: any;
-  awsSecretKey: any;
-  awsBucketName = "btsworkerfiles";
 
-  constructor(private studentService: StudentService) {}
+  ngOnInit(): void {
+    this.loadAWSKeys();
+    this.loadDepartments();
+    this.loadEditStudent();
+  }
 
-  ngOnInit() {
+  // ===================== LOAD AWS KEYS =====================
+  loadAWSKeys() {
 
-    // Load ACCESS Key
     this.studentService.getAWSAccessKey().subscribe(res => {
-      console.log("Encrypted Access Key:", res);
       this.awsAccessKey = this.decrypt(res);
-      console.log("Decrypted Access Key:", this.awsAccessKey);
+      console.log('Decrypted Access Key:', this.awsAccessKey);
     });
 
-    // Load SECRET Key
     this.studentService.getAWSSecretKey().subscribe(res => {
-      console.log("Encrypted Secret Key:", res);
       this.awsSecretKey = this.decrypt(res);
-      console.log("Decrypted Secret Key:", this.awsSecretKey);
+      console.log('Decrypted Secret Key:', this.awsSecretKey);
     });
 
-    // Load edit student
-    const data = localStorage.getItem("editStudent");
+  }
 
-    if (data) {
-      const s = JSON.parse(data);
-
-      this.model = {
-        studentID: s.studentID,
-        FullName: s.FullName ?? s.fullName,
-        Email: s.Email ?? s.email,
-        Phoneno: s.Phoneno ?? s.phoneno,
-        Gender: s.Gender ?? s.gender,
-        Department: String(s.Department ?? s.department),
-        Address: s.Address ?? s.address,
-        AddressProf: s.AddressProf ?? s.addressProf,
-        CreatedAt: s.CreatedAt ?? new Date()
-      };
-
-      this.proofList = this.model.AddressProf ? this.model.AddressProf.split(",") : [];
-    }
-
-    // Load department list
-    this.studentService.getDepartments().subscribe(res => {
-      this.DepartmentList = res;
+  // ===================== LOAD DEPARTMENTS =====================
+  loadDepartments() {
+    this.studentService.getDepartments().subscribe({
+      next: res => {
+        this.departments = typeof res === 'string' ? JSON.parse(res) : res;
+      },
+      error: err => console.error('Department load failed', err)
     });
   }
 
-  // Toggle checkboxes
+  // ===================== LOAD EDIT DATA =====================
+  loadEditStudent() {
+    const data = localStorage.getItem('editStudent');
+    if (!data) return;
+
+    const s = JSON.parse(data);
+    this.model = {
+      studentID: s.StudentID || s.studentID || 0,
+      FullName: s.FullName || '',
+      Email: s.Email || '',
+      Phoneno: s.Phoneno || '',
+      Gender: s.Gender || '',
+      Department: String(s.DepartmentId || s.Department || ''),
+      Address: s.Address || '',
+      AddressProf: s.AddressProf || ''
+    };
+
+    this.proofList = this.model.AddressProf
+      ? this.model.AddressProf.split(',')
+      : [];
+
+    this.cdr.detectChanges();
+  }
+
+  // ===================== AES DECRYPT =====================
+  decrypt(encryptedText: string): string {
+    const key = CryptoJS.enc.Utf8.parse('NLKpQsoPaeoZ55ul');
+    const iv  = CryptoJS.enc.Utf8.parse('RbeqxtNXxucHI123');
+
+    return CryptoJS.AES.decrypt(encryptedText, key, {
+      iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    }).toString(CryptoJS.enc.Utf8);
+  }
+
+  // ===================== FILE SELECT =====================
+  onFileSelected(event: any) {
+    this.selectedFiles = Array.from(event.target.files);
+  }
+
+  // ===================== ADDRESS PROOF =====================
   toggleProof(event: any) {
     const value = event.target.value;
-    if (event.target.checked) this.proofList.push(value);
-    else this.proofList = this.proofList.filter(x => x !== value);
+
+    if (event.target.checked) {
+      this.proofList.push(value);
+    } else {
+      this.proofList = this.proofList.filter(x => x !== value);
+    }
 
     this.model.AddressProf = this.proofList.join(',');
   }
 
-  onFileSelected(event: any) {
-    this.selectedFile = event.target.files[0];
-  }
-
-  decrypt(encryptedText: string): string {
-    const key = CryptoJS.enc.Utf8.parse('NLKpQsoPaeoZ55ul');
-    const iv = CryptoJS.enc.Utf8.parse('RbeqxtNXxucHI123');
-
-    const decrypted = CryptoJS.AES.decrypt(encryptedText, key, {
-      iv: iv,
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7
-    });
-    
-    return decrypted.toString(CryptoJS.enc.Utf8);
-  }
-
-  // Upload to S3
-  uploadToS3(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (!this.selectedFile) return reject("No file selected!");
-
-      const fd = new FormData();
-      fd.append("file", this.selectedFile);
-
-      this.studentService.uploadToS3(
-        fd,
-        this.awsAccessKey,
-        this.awsSecretKey,
-        this.awsBucketName
-      ).subscribe({
-        next: (res: any) => {
-          console.log("S3 Upload Success:", res);
-          resolve(res.filePath);
-        },
-        error: (err) => {
-          console.error("S3 Upload Error:", err);
-          console.log("Validation Errors:", err.error.errors);
-          console.log("About to upload to S3 with headers:", {
-          awsAccess: this.awsAccessKey,
-          awsSecret: this.awsSecretKey,
-          awsBucket: this.awsBucketName
-});
-console.log("Selected file:", this.selectedFile?.name, "size:", this.selectedFile?.size);
-          reject(err);
-        }
-      });
-    });
-  }
-
-  // Submit
+  // ===================== SUBMIT =====================
   onSubmit(form: any) {
+    if (!this.model.FullName.trim()) return alert('Full Name required');
+    if (!this.model.Department) return alert('Select department');
 
-    if (!this.model.FullName?.trim()) return alert("Full Name required");
-    if (!this.model.Email?.trim()) return alert("Email required");
-    if (!this.model.Phoneno?.trim()) return alert("Phone required");
-    if (this.proofList.length === 0) return alert("Select at least one proof");
-
-    this.model.CreatedAt = new Date();
-
-    if (this.model.studentID)
+    if (this.model.studentID > 0) {
       this.updateStudent(form);
-    else
+    } else {
       this.insertStudent(form);
-  }
-
-  // Insert
-  async insertStudent(form: any) {
-    try {
-      if (this.selectedFile)
-        this.model.DocumentPath = await this.uploadToS3();
-
-      this.studentService.insertStudent(this.model).subscribe({
-        next: () => {
-          alert("Inserted Successfully!");
-          this.resetForm(form);
-        },
-        error: (err) => console.error(err)
-      });
-
-    } catch (err) {
-      alert("File upload failed!");
     }
   }
 
-  // Update
-  async updateStudent(form: any) {
+  // ===================== INSERT =====================
+  insertStudent(form: any) {
+    this.studentService.insertStudent(this.model).subscribe({
+      next: async (res: any) => {
+        const newId = res.studentId || res.StudentID;
 
-    try {
-      if (this.selectedFile)
-        this.model.DocumentPath = await this.uploadToS3();
+        if (newId && this.selectedFiles.length > 0) {
+          await this.uploadDocuments(newId);
+        }
 
-      this.studentService.updateStudent(this.model.studentID, this.model)
-        .subscribe({
-          next: () => {
-            alert("Updated Successfully!");
-            this.resetForm(form);
-            localStorage.removeItem("editStudent");
-          }
-        });
-
-    } catch (err) {
-      console.error(err);
-      alert("Updated but file upload failed.");
-    }
+        alert('Inserted successfully');
+        this.afterSave(form);
+      },
+      error: () => alert('Insert failed')
+    });
   }
 
-  editStudent(s: any) {
-    localStorage.setItem("editStudent", JSON.stringify(s));
-    window.location.href = "/";
+  // ===================== UPDATE =====================
+  updateStudent(form: any) {
+    this.studentService.updateStudent(this.model.studentID, this.model).subscribe({
+      next: async () => {
+        if (this.selectedFiles.length > 0) {
+          await this.uploadDocuments(this.model.studentID);
+        }
+
+        alert('Updated successfully');
+        this.afterSave(form);
+      },
+      error: () => alert('Update failed')
+    });
   }
 
+  // ===================== UPLOAD DOCUMENTS =====================
+  uploadDocuments(studentId: number): Promise<any> {
+    const formData = new FormData();
+    this.selectedFiles.forEach(f => formData.append('files', f));
+
+    return this.studentService.uploadToS3(studentId, formData).toPromise();
+  }
+
+  // ===================== AFTER SAVE =====================
+  afterSave(form: any) {
+    localStorage.removeItem('editStudent');
+    this.resetForm(form);
+    this.router.navigate(['/student-list']);
+  }
+
+  // ===================== RESET =====================
   resetForm(form: any) {
-    form.reset();
+    this.model = {
+      studentID: 0,
+      FullName: '',
+      Email: '',
+      Phoneno: '',
+      Gender: '',
+      Department: '',
+      Address: '',
+      AddressProf: ''
+    };
+
+    this.selectedFiles = [];
     this.proofList = [];
-    this.selectedFile = undefined!;
-    localStorage.removeItem("editStudent");
+    form?.resetForm();
   }
 }

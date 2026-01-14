@@ -3,10 +3,9 @@ export interface Student {
   FullName: string;
   Email: string;
   Phoneno: string;
-  Gender: string;
-  Department: string;
+  Gender: string; 
+  Department: string;  // 👈 required
   Address: string;
   AddressProf: string;
-  DocumentPath?: string;
-  CreatedAt?: Date;
+  DocumentPaths?: string[];
 }

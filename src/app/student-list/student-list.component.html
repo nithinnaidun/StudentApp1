@@ -2,7 +2,11 @@
 
   <h2 class="title">Student Details</h2>
 
-  <table class="student-table">
+  <button class="refresh-btn" (click)="loadStudents()">Refresh List</button>
+
+  <div *ngIf="isLoading" class="loader">Refreshing data...</div>
+
+  <table class="student-table" [class.loading-opacity]="isLoading">
     <thead>
       <tr>
         <th>ID</th>
@@ -12,32 +16,70 @@
         <th>Gender</th>
         <th>Department</th>
         <th>Address</th>
-        
         <th>Address Proof</th>
-        
+        <th>Documents</th>
         <th>Action</th>
       </tr>
     </thead>
 
     <tbody>
-      <tr *ngFor="let s of students">
-        <td>{{ s.studentID }}</td>
-        <td>{{ s.fullName }}</td>
-        <td>{{ s.email }}</td>
-        <td>{{ s.phoneno }}</td>
-        <td>{{ s.gender }}</td>
-        <td>{{ getDeptName(s.department) }}</td>
-        <td>{{ s.address }}</td>
-       
-        <td>{{ s.addressProf }}</td>
+      <tr *ngFor="let s of groupedStudents">
+
+        <td>{{ s.StudentID }}</td>
+        <td>{{ s.FullName }}</td>
+        <td>{{ s.Email }}</td>
+        <td>{{ s.Phoneno }}</td>
+        <td>{{ s.Gender }}</td>
+        <td>{{ s.DepartmentName }}</td>
+        <td>{{ s.Address }}</td>
+        <td>{{ s.AddressProf }}</td>
+
+        <!-- DOCUMENT VIEW -->
+        <td>
+          <button
+            class="view-btn"
+            *ngIf="s.Documents?.length > 0"
+            (click)="openDocumentViewer(s.Documents)">
+            View ({{ s.Documents.length }})
+          </button>
+          <span *ngIf="!s.Documents || s.Documents.length === 0">No Files</span>
+        </td>
+
+        <!-- ACTIONS -->
         <td>
           <button class="edit-btn" (click)="editStudent(s)">Edit</button>
-        
-          <button class="delete-btn" (click)="deleteStudent(s.studentID)">Delete</button>
+          <button class="delete-btn" (click)="deleteStudent(s.StudentID)">Delete</button>
         </td>
+
       </tr>
     </tbody>
-    
   </table>
+</div>
 
+<!-- ================= DOCUMENT MODAL ================= -->
+
+<div class="modal" *ngIf="docUrls.length > 0">
+  <div class="modal-content">
+
+    <div class="modal-header">
+      <span>Viewing {{ currentIndex + 1 }} of {{ docUrls.length }}</span>
+      <span class="close" (click)="closeModal()">&times;</span>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="nav-buttons">
+        <button (click)="prevFile()" [disabled]="currentIndex === 0">Previous</button>
+        <button (click)="nextFile()" [disabled]="currentIndex === docUrls.length - 1">Next</button>
+      </div>
+
+      <iframe
+        [src]="docUrls[currentIndex] | safeUrl"
+        width="100%"
+        height="600px"
+        style="border:none">
+      </iframe>
+
+    </div>
+  </div>
 </div>
